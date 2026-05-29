@@ -5,7 +5,9 @@
 #include "print_monitor.h"
 #include "printer_power.h"
 #include "sd_card.h"
+#include "system_info.h"
 #include "timelapse.h"
+#include <ESP.h>
 #include <WiFi.h>
 #include <esp_camera.h>
 #include <esp_timer.h>
@@ -180,6 +182,18 @@ static void handleStop() {
     server.send(200, "text/plain", "stream stop requested");
 }
 
+static void handleSignal() {
+    String json = "{\"rssi\":" + String(WiFi.RSSI()) +
+                  ",\"ssid\":\"" + WiFi.SSID() + "\"}";
+    server.send(200, "application/json", json);
+}
+
+static void handleReboot() {
+    server.send(200, "text/plain", "rebooting...");
+    delay(200);
+    ESP.restart();
+}
+
 static void handleControl() {
     if (!server.hasArg("var")) {
         server.send(400, "text/plain", "var required");
@@ -203,6 +217,7 @@ static void handleDump() {
     d += "IP: " + WiFi.localIP().toString() + " RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     d += "Heap: " + String(ESP.getFreeHeap()) + " / " + String(ESP.getHeapSize()) + "\n";
     d += "Uptime: " + String(millis() / 1000) + " s\n";
+    d += "Chip temp: " + String(systemChipTempC(), 1) + " C\n";
     d += "Stream active: " + String(cameraStreamActive() ? "yes" : "no") + "\n";
     d += "SD: " + String(sdReady() ? "ok" : "no");
     if (sdReady()) {
@@ -218,6 +233,7 @@ static void handleDump() {
 static void handleStatus() {
     String json = "{";
     json += "\"name\":\"" + String(CAM_NAME) + "\"";
+    json += ",\"version\":\"" + String(FIRMWARE_VERSION) + "\"";
     json += ",\"camera\":\"" + String(cameraSensorName()) + "\"";
     json += ",\"snapshot\":\"" + String(cameraSnapshotResolutionName()) + "\"";
     json += ",\"snapshot_quality\":" + String(cameraSnapshotQuality());
@@ -230,6 +246,8 @@ static void handleStatus() {
     json += ",\"timelapse\":" + timelapseStatusJson();
     json += ",\"monitor\":" + monitorStatusJson();
     json += ",\"printer_power\":" + String(printerPowerIsOn() ? "true" : "false");
+    json += ",\"system\":" + systemInfoJson();
+    json += ",\"stream_url\":\"http://" + WiFi.localIP().toString() + "/stream\"";
     json += "}";
     server.send(200, "application/json", json);
 }
@@ -252,7 +270,13 @@ void webInit() {
     server.on("/stop", HTTP_GET, handleStop);
     server.on("/control", HTTP_GET, handleControl);
     server.on("/dump", HTTP_GET, handleDump);
+    server.on("/signal", HTTP_GET, handleSignal);
+    server.on("/reboot", HTTP_GET, handleReboot);
     server.on("/api/status", HTTP_GET, handleStatus);
+
+    server.on("/esp32_cam_main", HTTP_GET, handleRoot);
+    server.on("/esp32_cam_stream", HTTP_GET, handleStream);
+    server.on("/esp32_cam_capture", HTTP_GET, handleCapture);
 
     server.on("/api/timelapse/start", HTTP_POST, []() {
         uint32_t sec = timelapseIntervalSec();

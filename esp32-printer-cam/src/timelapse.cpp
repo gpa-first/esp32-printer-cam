@@ -2,6 +2,7 @@
 #include "app_config.h"
 #include "camera_module.h"
 #include "sd_card.h"
+#include "settings_store.h"
 #include <time.h>
 
 static bool g_enabled = false;
@@ -37,10 +38,11 @@ void timelapseSetEnabled(bool on) {
 
 bool timelapseEnabled() { return g_enabled; }
 
-void timelapseSetIntervalSec(uint32_t sec) {
+void timelapseSetIntervalSec(uint32_t sec, bool persist) {
     if (sec < TIMELAPSE_MIN_INTERVAL_SEC) sec = TIMELAPSE_MIN_INTERVAL_SEC;
     if (sec > TIMELAPSE_MAX_INTERVAL_SEC) sec = TIMELAPSE_MAX_INTERVAL_SEC;
     g_intervalSec = sec;
+    if (persist) settingsSave();
 }
 
 uint32_t timelapseIntervalSec() { return g_intervalSec; }
@@ -71,6 +73,9 @@ void timelapseLoop() {
         g_shotCount++;
         g_lastShotMs = millis();
         Serial.printf("[TL] saved %s (%u bytes)\n", path, (unsigned)len);
+        if (g_shotCount > TIMELAPSE_MAX_FILES_SESSION) {
+            sdPruneOldestJpegs(g_sessionDir, TIMELAPSE_MAX_FILES_SESSION);
+        }
     }
     free(buf);
 }

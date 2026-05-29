@@ -7,8 +7,12 @@
 #include "timelapse.h"
 #include "web_server.h"
 #include "wifi_manager.h"
+#include "settings_store.h"
+#include "pir_sensor.h"
+#include "system_info.h"
 
 #include <WiFi.h>
+#include <ESP.h>
 #include <esp_wifi.h>
 
 #if __has_include("secrets.h")
@@ -62,7 +66,16 @@ static void handleTelegramCommand(const String &cmd, const String &args) {
             "/monitor_on [сек] — мониторинг печати\n"
             "/monitor_off\n"
             "/timelapse_on [сек] — таймлапс на SD\n"
-            "/timelapse_off");
+            "/timelapse_off\n"
+            "/reboot — перезагрузка (веб: /reboot)");
+        return;
+    }
+
+    if (cmd == "/reboot") {
+        telegramSendMessage("🔄 Перезагрузка...");
+        settingsSave();
+        delay(300);
+        ESP.restart();
         return;
     }
 
@@ -89,7 +102,8 @@ static void handleTelegramCommand(const String &cmd, const String &args) {
         msg += "Мониторинг: " + String(monitorEnabled() ? "вкл" : "выкл") +
                ", движение " + String(monitorLastMotionPercent(), 1) + "%\n";
         msg += "Снимки: " + String(cameraSnapshotResolutionName()) +
-               " Q" + String(cameraSnapshotQuality());
+               " Q" + String(cameraSnapshotQuality()) + "\n";
+        msg += "Темп. чипа: " + String(systemChipTempC(), 1) + " °C";
         telegramSendMessage(msg);
         return;
     }
@@ -140,6 +154,7 @@ void setup() {
     timelapseInit();
     monitorInit();
     printerPowerInit();
+    pirInit();
 
     connectWifi();
     setupNtp();
@@ -158,5 +173,6 @@ void loop() {
     monitorLoop();
     printerPowerLoop();
     wifiManagerLoop();
+    pirLoop();
     delay(2);
 }

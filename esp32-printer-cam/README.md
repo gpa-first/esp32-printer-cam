@@ -15,6 +15,9 @@
 | Вспышка | Экспоненциальная PWM-подсветка (как в [esp32-cam-webserver](https://github.com/easytarget/esp32-cam-webserver)) |
 | Просмотрщик | `/viewer` — полноэкранный MJPEG без лишних элементов |
 | API камеры | `/control?var=lamp&val=50` — настройки сенсора и подсветки |
+| NVS | Сохранение яркости, интервалов, порога движения после перезагрузки |
+| PIR (опц.) | AM312 на GPIO12 — мгновенный снимок в Telegram |
+| OctoPrint | URL `/esp32_cam_stream`, `/esp32_cam_capture` — [плагин](https://github.com/CyberSensei1/OctoPrint-Esp32CamUI) |
 | Telegram | Команды `/photo`, `/status`, `/monitor_on`, `/timelapse_on` и др. |
 
 ## Железо
@@ -71,7 +74,11 @@
 | GET | `/control?var=&val=` | `lamp`, `framesize`, `quality`, `hmirror`, `vflip`, … |
 | GET | `/dump` | Диагностика (HTML) |
 | GET | `/stop` | Остановить активный стрим |
-| GET | `/api/status` | JSON: камера, сенсор, таймлапс, мониторинг |
+| GET | `/signal` | RSSI Wi‑Fi (JSON) |
+| GET | `/reboot` | Перезагрузка ESP32 |
+| GET | `/esp32_cam_stream` | Алиас стрима для OctoPrint |
+| GET | `/esp32_cam_capture` | Алиас снимка |
+| GET | `/api/status` | JSON: камера, сенсор, таймлапс, мониторинг, температура чипа |
 | POST | `/api/timelapse/start` | `{"interval":30}` |
 | POST | `/api/timelapse/stop` | Остановка |
 | POST | `/api/monitor/start` | `{"interval":60}` |
@@ -90,6 +97,7 @@
 - `/monitor_off`  
 - `/timelapse_on 30` — таймлапс (нужна SD)  
 - `/timelapse_off`  
+- `/reboot` — перезагрузка камеры  
 
 ## Настройка
 
@@ -105,6 +113,8 @@
 - `STREAM_AUTOLAMP`, `STREAM_LAMP_PERCENT` — подсветка при стриме  
 - `STREAM_MIN_FRAME_MS` — лимит FPS потока  
 - `FLASH_LAMP_PERCENT`, `FLASH_DARK_AVG_THRESHOLD` — снимки  
+- `TIMELAPSE_MAX_FILES_SESSION` — лимит кадров на сессию (старые удаляются)  
+- `MONITOR_PHOTO_ON_MOTION_ONLY`, `PIR_SENSOR_ENABLE` — экономия Telegram / PIR  
 
 ## Сборка таймлапса в видео (на ПК)
 
@@ -140,6 +150,9 @@ esp32-printer-cam/
     ├── camera_module.*    ← камера, подсветка, стрим
     ├── camera_control.* ← API /control
     ├── wifi_manager.*
+    ├── settings_store.*
+    ├── system_info.*
+    ├── pir_sensor.*
     ├── sd_card.*
     ├── timelapse.*
     ├── print_monitor.*
@@ -147,6 +160,21 @@ esp32-printer-cam/
     ├── telegram_bot.*
     └── web_server.*
 ```
+
+## Источники идей
+
+Проект объединяет практики из открытых репозиториев:
+
+| Репозиторий | Что использовано |
+|-------------|------------------|
+| [easytarget/esp32-cam-webserver](https://github.com/easytarget/esp32-cam-webserver) | Пины, API `/control`, viewer, подсветка |
+| [bitluni/ESP32CamTimeLapse](https://github.com/bitluni/ESP32CamTimeLapse) | Таймлапс на SD |
+| [yoursunny/esp32cam](https://github.com/yoursunny/esp32cam) | Автоопределение сенсора (esp32-camera) |
+| [electrical-pro/ESP32CAM](https://github.com/electrical-pro/ESP32CAM) | `/signal`, `/reboot` |
+| [alanesq/CameraWifiMotion](https://github.com/alanesq/CameraWifiMotion) | Детекция движения по кадру |
+| [mtnbkr88/ESP32CAMVideoRecorder](https://github.com/mtnbkr88/ESP32CAMVideoRecorder) | Ротация файлов на SD |
+| [JJFourie/ESP32Cam-MQTT-SPIFFS-PIR](https://github.com/JJFourie/ESP32Cam-MQTT-SPIFFS-PIR) | NVS-настройки, PIR, статус (RSSI, temp) |
+| [CyberSensei1/OctoPrint-Esp32CamUI](https://github.com/CyberSensei1/OctoPrint-Esp32CamUI) | Совместимые URL для OctoPrint |
 
 ## Лицензия
 

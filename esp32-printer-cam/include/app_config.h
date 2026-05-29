@@ -6,6 +6,7 @@
 // #define CAMERA_MODEL_ESP_EYE
 
 #define CAM_NAME "ESP32 Printer Cam"
+#define FIRMWARE_VERSION "1.1.0"
 
 // --- Камера / поток ---
 #define STREAM_FRAMESIZE   FRAMESIZE_SVGA
@@ -30,12 +31,21 @@
 #define TIMELAPSE_MIN_INTERVAL_SEC     5
 #define TIMELAPSE_MAX_INTERVAL_SEC     3600
 #define TIMELAPSE_FOLDER               "/timelapse"
+#define TIMELAPSE_MAX_FILES_SESSION    500  // ротация: удалять старые кадры в сессии
 
 // --- Мониторинг печати ---
 #define MONITOR_DEFAULT_INTERVAL_SEC   60
-#define MONITOR_STALL_MINUTES          15   // нет изменений N мин → «возможно зависла»
-#define MONITOR_MOTION_THRESHOLD       8.0f // % изменения пикселей между кадрами
-#define MONITOR_SAMPLE_SIZE            32   // размер для сравнения кадров
+#define MONITOR_STALL_MINUTES          15
+#define MONITOR_MOTION_THRESHOLD       8.0f
+#define MONITOR_SAMPLE_SIZE            32
+#define MONITOR_PHOTO_ON_MOTION_ONLY   1    // фото в TG только при движении (экономия)
+#define MONITOR_FORCE_PHOTO_EVERY_N    10   // иначе каждые N проверок — контрольный кадр
+#define MONITOR_TELEGRAM_COOLDOWN_MS   30000
+
+// --- PIR (AM312), опционально — JJFourie / mtnbkr88 ---
+#define PIR_SENSOR_ENABLE              0
+#define PIR_GPIO                       13   // не GPIO12 — он влияет на загрузку с флеша
+#define PIR_COOLDOWN_MS                60000
 
 // --- Telegram ---
 #define TELEGRAM_POLL_INTERVAL_MS      2000

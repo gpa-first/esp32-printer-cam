@@ -1,7 +1,11 @@
 #include "camera_control.h"
 #include "app_config.h"
 #include "camera_module.h"
+#include "print_monitor.h"
+#include "settings_store.h"
 #include <esp_camera.h>
+#include <ESP.h>
+#include <cstring>
 
 bool cameraControlSet(const char *var, int val) {
     sensor_t *s = esp_camera_sensor_get();
@@ -9,10 +13,21 @@ bool cameraControlSet(const char *var, int val) {
 
     if (!strcmp(var, "lamp")) {
         cameraSetLampPercent(constrain(val, 0, 100));
+        settingsSave();
+        return true;
+    }
+    if (!strcmp(var, "save_prefs")) {
+        settingsSave();
+        return true;
+    }
+    if (!strcmp(var, "reboot")) {
+        settingsSave();
+        ESP.restart();
         return true;
     }
     if (!strcmp(var, "autolamp")) {
         cameraSetStreamAutolamp(val != 0);
+        settingsSave();
         return true;
     }
     if (!strcmp(var, "framesize")) {
@@ -34,6 +49,10 @@ bool cameraControlSet(const char *var, int val) {
     if (!strcmp(var, "awb")) return s->set_whitebal(s, val) == 0;
     if (!strcmp(var, "aec")) return s->set_exposure_ctrl(s, val) == 0;
     if (!strcmp(var, "agc")) return s->set_gain_ctrl(s, val) == 0;
+    if (!strcmp(var, "motion_thr")) {
+        monitorSetMotionThreshold((float)val);
+        return true;
+    }
 
     return false;
 }
