@@ -10,10 +10,15 @@
 #include "settings_store.h"
 #include "pir_sensor.h"
 #include "system_info.h"
+#include "mdns_service.h"
+#include "ota_service.h"
 
 #include <WiFi.h>
 #include <ESP.h>
 #include <esp_wifi.h>
+#if BROWNOUT_DISABLE
+#include "soc/rtc_cntl_reg.h"
+#endif
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -95,6 +100,7 @@ static void handleTelegramCommand(const String &cmd, const String &args) {
         String msg = "📡 <b>Статус</b>\n";
         msg += "Камера: " + String(cameraSensorName()) + "\n";
         msg += "IP: " + WiFi.localIP().toString() + "\n";
+        msg += "mDNS: http://" + String(MDNS_HOSTNAME) + ".local\n";
         msg += "Heap: " + String(ESP.getFreeHeap()) + " B\n";
         msg += "SD: " + String(sdReady() ? "OK" : "нет") + "\n";
         msg += "Таймлапс: " + String(timelapseEnabled() ? "вкл" : "выкл") +
@@ -143,12 +149,18 @@ static void handleTelegramCommand(const String &cmd, const String &args) {
 void setup() {
     Serial.begin(115200);
     Serial.println();
-    Serial.println("=== ESP32 3D Printer Camera ===");
+    Serial.printf("=== %s v%s ===\n", CAM_NAME, FIRMWARE_VERSION);
+
+#if BROWNOUT_DISABLE
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+#endif
 
     if (!cameraInitAuto(g_camInfo)) {
         Serial.println("FATAL: camera init failed. Проверьте шлейф и питание 5V/3.3V");
         while (true) delay(1000);
     }
+
+    settingsLoad();
 
     sdInit();
     timelapseInit();
@@ -158,6 +170,8 @@ void setup() {
 
     connectWifi();
     setupNtp();
+    mdnsInit();
+    otaInit();
 
     telegramInit();
     telegramSetCommandHandler(handleTelegramCommand);
@@ -173,6 +187,7 @@ void loop() {
     monitorLoop();
     printerPowerLoop();
     wifiManagerLoop();
+    otaLoop();
     pirLoop();
     delay(2);
 }

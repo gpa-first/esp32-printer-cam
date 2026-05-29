@@ -18,6 +18,10 @@
 | NVS | Сохранение яркости, интервалов, порога движения после перезагрузки |
 | PIR (опц.) | AM312 на GPIO12 — мгновенный снимок в Telegram |
 | OctoPrint | URL `/esp32_cam_stream`, `/esp32_cam_capture` — [плагин](https://github.com/CyberSensei1/OctoPrint-Esp32CamUI) |
+| mDNS | `http://esp32-printer-cam.local/` — как в [esp32cam-rtsp](https://github.com/rzeldent/esp32cam-rtsp) |
+| OTA | Беспроводная прошивка через ArduinoOTA |
+| HTTP Auth | Опционально Basic Auth на поток и снимки |
+| Движение | Grayscale-детектор ([CameraWifiMotion](https://github.com/alanesq/CameraWifiMotion)) |
 | Telegram | Команды `/photo`, `/status`, `/monitor_on`, `/timelapse_on` и др. |
 
 ## Железо
@@ -52,7 +56,15 @@
    pio run -t upload
    pio device monitor
    ```
-5. В Serial увидите строку вида `[CAM] detected: OV2640 ...`, затем IP. Откройте в браузере.
+5. В Serial: `[CAM] detected...`, `[mDNS] http://esp32-printer-cam.local/`. Откройте в браузере по mDNS или IP.
+
+### OTA-прошивка (без USB)
+
+```bash
+pio run -t upload --upload-port esp32-printer-cam.local
+```
+
+Пароль OTA задаётся в `secrets.h` (`OTA_PASSWORD`).
 
 ### Telegram
 
@@ -70,7 +82,8 @@
 | GET | `/` | Веб-интерфейс + управление |
 | GET | `/viewer` | Только поток (двойной клик — fullscreen) |
 | GET | `/stream` | MJPEG (один клиент) |
-| GET | `/capture` или `/capture.jpg` | Снимок max quality |
+| GET | `/capture`, `/capture.jpg`, `/snapshot` | Снимок max quality |
+| GET | `/health`, `/api/health` | Проверка живости (JSON) |
 | GET | `/control?var=&val=` | `lamp`, `framesize`, `quality`, `hmirror`, `vflip`, … |
 | GET | `/dump` | Диагностика (HTML) |
 | GET | `/stop` | Остановить активный стрим |
@@ -115,6 +128,8 @@
 - `FLASH_LAMP_PERCENT`, `FLASH_DARK_AVG_THRESHOLD` — снимки  
 - `TIMELAPSE_MAX_FILES_SESSION` — лимит кадров на сессию (старые удаляются)  
 - `MONITOR_PHOTO_ON_MOTION_ONLY`, `PIR_SENSOR_ENABLE` — экономия Telegram / PIR  
+- `MDNS_HOSTNAME`, `OTA_ENABLE`, `WEB_AUTH_ENABLE` — сеть и безопасность  
+- `BROWNOUT_DISABLE` — стабильность при скачках питания 5 V  
 
 ## Сборка таймлапса в видео (на ПК)
 
@@ -153,6 +168,10 @@ esp32-printer-cam/
     ├── settings_store.*
     ├── system_info.*
     ├── pir_sensor.*
+    ├── motion_detect.*
+    ├── mdns_service.*
+    ├── ota_service.*
+    ├── web_auth.*
     ├── sd_card.*
     ├── timelapse.*
     ├── print_monitor.*
@@ -175,6 +194,11 @@ esp32-printer-cam/
 | [mtnbkr88/ESP32CAMVideoRecorder](https://github.com/mtnbkr88/ESP32CAMVideoRecorder) | Ротация файлов на SD |
 | [JJFourie/ESP32Cam-MQTT-SPIFFS-PIR](https://github.com/JJFourie/ESP32Cam-MQTT-SPIFFS-PIR) | NVS-настройки, PIR, статус (RSSI, temp) |
 | [CyberSensei1/OctoPrint-Esp32CamUI](https://github.com/CyberSensei1/OctoPrint-Esp32CamUI) | Совместимые URL для OctoPrint |
+| [rzeldent/esp32cam-rtsp](https://github.com/rzeldent/esp32cam-rtsp) | mDNS, `/snapshot`, веб-конфиг (RTSP — отдельный проект) |
+| [gemi254/ESP32-CAM_MJPEG2SD](https://github.com/gemi254/ESP32-CAM_MJPEG2SD) | MJPEG + SD + motion |
+| [GitHub Topic: esp32cam](https://github.com/topics/esp32cam) | Обзор актуальных проектов |
+
+Для **RTSP** (VLC, NVR) см. [esp32cam-rtsp](https://github.com/rzeldent/esp32cam-rtsp) — наш проект использует HTTP MJPEG + Telegram.
 
 ## Лицензия
 

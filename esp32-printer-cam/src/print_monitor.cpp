@@ -1,9 +1,9 @@
 #include "print_monitor.h"
 #include "app_config.h"
 #include "camera_module.h"
+#include "motion_detect.h"
 #include "settings_store.h"
 #include "telegram_bot.h"
-#include <esp_camera.h>
 
 static bool g_enabled = false;
 static uint32_t g_intervalSec = MONITOR_DEFAULT_INTERVAL_SEC;
@@ -14,24 +14,6 @@ static uint32_t g_checkCounter = 0;
 static float g_motionThreshold = MONITOR_MOTION_THRESHOLD;
 static float g_lastMotion = 0;
 static bool g_stallNotified = false;
-
-static float jpegMotionPercent(const uint8_t *a, size_t lenA, const uint8_t *b, size_t lenB) {
-    size_t n = min(min(lenA, lenB), (size_t)MONITOR_SAMPLE_SIZE * 64);
-    if (n < MONITOR_SAMPLE_SIZE) return 100.0f;
-
-    size_t step = n / MONITOR_SAMPLE_SIZE;
-    uint32_t diff = 0;
-    for (size_t i = 0; i < MONITOR_SAMPLE_SIZE; i++) {
-        int d = (int)a[i * step] - (int)b[i * step];
-        if (d < 0) d = -d;
-        diff += (uint32_t)d;
-    }
-    return (100.0f * diff) / (255.0f * MONITOR_SAMPLE_SIZE);
-}
-
-static bool captureSmallJpeg(uint8_t **buf, size_t *len) {
-    return cameraCaptureJpeg(FRAMESIZE_96X96, 20, buf, len, false);
-}
 
 static bool shouldSendPhoto(bool motionDetected, bool forceStall) {
     if (forceStall) return true;
@@ -108,28 +90,9 @@ void monitorLoop() {
     if (millis() - g_lastCheckMs < g_intervalSec * 1000UL) return;
     g_lastCheckMs = millis();
 
-    static uint8_t *prevBuf = nullptr;
-    static size_t prevLen = 0;
-    static bool havePrev = false;
-
-    uint8_t *curBuf = nullptr;
-    size_t curLen = 0;
-    if (!captureSmallJpeg(&curBuf, &curLen)) return;
-
-    if (!havePrev) {
-        free(prevBuf);
-        prevBuf = curBuf;
-        prevLen = curLen;
-        havePrev = true;
-        return;
-    }
-
-    g_lastMotion = jpegMotionPercent(prevBuf, prevLen, curBuf, curLen);
-    free(prevBuf);
-    prevBuf = curBuf;
-    prevLen = curLen;
-
+    g_lastMotion = motionDetectPercent();
     bool motion = g_lastMotion >= g_motionThreshold;
+
     if (motion) {
         g_lastMotionMs = millis();
         g_stallNotified = false;

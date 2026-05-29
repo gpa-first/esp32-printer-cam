@@ -6,7 +6,10 @@
 // #define CAMERA_MODEL_ESP_EYE
 
 #define CAM_NAME "ESP32 Printer Cam"
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.2.0"
+
+// mDNS — http://esp32-printer-cam.local/ ([esp32cam-rtsp](https://github.com/rzeldent/esp32cam-rtsp))
+#define MDNS_HOSTNAME              "esp32-printer-cam"
 
 // --- Камера / поток ---
 #define STREAM_FRAMESIZE   FRAMESIZE_SVGA
@@ -53,6 +56,13 @@
 
 // --- Веб-сервер ---
 #define HTTP_PORT                      80
+#define WEB_AUTH_ENABLE                0    // 1 + WEB_AUTH_* в secrets.h
+
+// --- OTA ([topic esp32cam](https://github.com/topics/esp32cam)) ---
+#define OTA_ENABLE                     1
+
+// Стабильность питания (как в esp32cam-rtsp)
+#define BROWNOUT_DISABLE               1
 
 // NTP (для имён файлов таймлапса)
 #define NTP_SERVER                     "pool.ntp.org"

@@ -7,6 +7,7 @@
 #include "sd_card.h"
 #include "system_info.h"
 #include "timelapse.h"
+#include "web_auth.h"
 #include <ESP.h>
 #include <WiFi.h>
 #include <esp_camera.h>
@@ -108,6 +109,7 @@ static void handleViewer() {
 }
 
 static void handleStream() {
+    if (!webAuthOk(server)) return;
     if (cameraStreamActive()) {
         server.send(503, "text/plain", "Stream busy (one client at a time)");
         return;
@@ -166,6 +168,7 @@ static void handleStream() {
 }
 
 static void handleCapture() {
+    if (!webAuthOk(server)) return;
     cameraStatusLedFlash(50);
     uint8_t *buf = nullptr;
     size_t len = 0;
@@ -182,6 +185,13 @@ static void handleStop() {
     server.send(200, "text/plain", "stream stop requested");
 }
 
+static void handleHealth() {
+    String json = "{\"status\":\"ok\",\"version\":\"" + String(FIRMWARE_VERSION) + "\"";
+    json += ",\"mdns\":\"" + String(MDNS_HOSTNAME) + ".local\"";
+    json += ",\"system\":" + systemInfoJson() + "}";
+    server.send(200, "application/json", json);
+}
+
 static void handleSignal() {
     String json = "{\"rssi\":" + String(WiFi.RSSI()) +
                   ",\"ssid\":\"" + WiFi.SSID() + "\"}";
@@ -189,12 +199,14 @@ static void handleSignal() {
 }
 
 static void handleReboot() {
+    if (!webAuthOk(server)) return;
     server.send(200, "text/plain", "rebooting...");
     delay(200);
     ESP.restart();
 }
 
 static void handleControl() {
+    if (!webAuthOk(server)) return;
     if (!server.hasArg("var")) {
         server.send(400, "text/plain", "var required");
         return;
@@ -247,7 +259,9 @@ static void handleStatus() {
     json += ",\"monitor\":" + monitorStatusJson();
     json += ",\"printer_power\":" + String(printerPowerIsOn() ? "true" : "false");
     json += ",\"system\":" + systemInfoJson();
+    json += ",\"mdns_host\":\"" + String(MDNS_HOSTNAME) + ".local\"";
     json += ",\"stream_url\":\"http://" + WiFi.localIP().toString() + "/stream\"";
+    json += ",\"snapshot_url\":\"http://" + WiFi.localIP().toString() + "/snapshot\"";
     json += "}";
     server.send(200, "application/json", json);
 }
@@ -267,6 +281,9 @@ void webInit() {
     server.on("/stream", HTTP_GET, handleStream);
     server.on("/capture.jpg", HTTP_GET, handleCapture);
     server.on("/capture", HTTP_GET, handleCapture);
+    server.on("/snapshot", HTTP_GET, handleCapture);
+    server.on("/api/health", HTTP_GET, handleHealth);
+    server.on("/health", HTTP_GET, handleHealth);
     server.on("/stop", HTTP_GET, handleStop);
     server.on("/control", HTTP_GET, handleControl);
     server.on("/dump", HTTP_GET, handleDump);
@@ -302,7 +319,8 @@ void webInit() {
     });
 
     server.begin();
-    Serial.printf("[WEB] http://%s/  viewer: /viewer\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[WEB] http://%s.local/  (IP %s)\n",
+                  MDNS_HOSTNAME, WiFi.localIP().toString().c_str());
 }
 
 void webLoop() { server.handleClient(); }
