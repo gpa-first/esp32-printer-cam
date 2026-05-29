@@ -1,0 +1,8 @@
+#pragma once
+
+#include <Arduino.h>
+#include <WebServer.h>
+
+void webInit();
+void webLoop();
+WebServer &webInstance();
