@@ -6,6 +6,7 @@
 #include "telegram_bot.h"
 #include "timelapse.h"
 #include "web_server.h"
+#include "wifi_manager.h"
 
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -156,5 +157,6 @@ void loop() {
     timelapseLoop();
     monitorLoop();
     printerPowerLoop();
+    wifiManagerLoop();
     delay(2);
 }

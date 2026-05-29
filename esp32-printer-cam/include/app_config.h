@@ -1,8 +1,18 @@
 #pragma once
 
+// Плата (см. include/camera_pins.h)
+#define CAMERA_MODEL_AI_THINKER
+// #define CAMERA_MODEL_WROVER_KIT
+// #define CAMERA_MODEL_ESP_EYE
+
+#define CAM_NAME "ESP32 Printer Cam"
+
 // --- Камера / поток ---
-#define STREAM_FRAMESIZE   FRAMESIZE_SVGA   // 800x600 — баланс для стрима
+#define STREAM_FRAMESIZE   FRAMESIZE_SVGA
 #define STREAM_QUALITY     12
+#define STREAM_MIN_FRAME_MS        50   // лимит FPS (~20 fps max), как min_frame_time
+#define STREAM_AUTOLAMP            1    // подсветка на время MJPEG-стрима
+#define STREAM_LAMP_PERCENT        30   // яркость при стриме (0–100)
 
 // Снимки: макс. разрешение сенсора + лучший JPEG (0 = лучшее, 63 = хуже)
 #define SNAPSHOT_QUALITY           4
@@ -39,12 +49,11 @@
 #define GMT_OFFSET_SEC                 3 * 3600
 #define DAYLIGHT_OFFSET_SEC            0
 
-// --- Вспышка ESP32-CAM (GPIO 4 на AI-Thinker) ---
-#define FLASH_LED_GPIO                 4
+// --- Подсветка / вспышка (LAMP_PIN в camera_pins.h) ---
 #define FLASH_PWM_CHANNEL              7
-#define FLASH_PWM_FREQ_HZ              5000
-#define FLASH_PWM_RES_BITS             8
-#define FLASH_BRIGHTNESS               255   // 0..255
+#define FLASH_PWM_FREQ_HZ              50000
+#define FLASH_PWM_RES_BITS             9
+#define FLASH_LAMP_PERCENT             100  // яркость для снимков (0–100)
 #define FLASH_WARMUP_MS                80    // выдержка после включения
 #define FLASH_DARK_AVG_THRESHOLD       48    // средняя яркость 0..255 — ниже → вспышка
 #define FLASH_AUTO_ENABLE              true

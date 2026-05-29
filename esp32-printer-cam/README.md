@@ -12,7 +12,9 @@
 | Мониторинг | Периодические фото в Telegram + предупреждение, если нет движения N минут |
 | Включение принтера | Telegram при каждом старте (камера на одном питании с принтером) |
 | Качество снимков | Максимальное разрешение сенсора + JPEG Q4 |
-| Вспышка | Автовключение LED GPIO4 при съёмке в темноте |
+| Вспышка | Экспоненциальная PWM-подсветка (как в [esp32-cam-webserver](https://github.com/easytarget/esp32-cam-webserver)) |
+| Просмотрщик | `/viewer` — полноэкранный MJPEG без лишних элементов |
+| API камеры | `/control?var=lamp&val=50` — настройки сенсора и подсветки |
 | Telegram | Команды `/photo`, `/status`, `/monitor_on`, `/timelapse_on` и др. |
 
 ## Железо
@@ -27,9 +29,11 @@
 
 Если ESP32 питается постоянно, а принтер включается отдельно — в `app_config.h` установите `PRINTER_POWER_GPIO_ENABLE` в `1` и подключите оптопару PC817 к **GPIO 33**.
 
-### Вспышка
+### Плата и подсветка
 
-На AI-Thinker вспышка — **GPIO 4**. Перед каждым снимком (таймлапс, мониторинг, `/photo`) измеряется освещённость; если темно — LED включается на `FLASH_WARMUP_MS` мс. Порог: `FLASH_DARK_AVG_THRESHOLD` в `app_config.h`.
+Пины задаются в `include/camera_pins.h` (по умолчанию **AI-Thinker**). Другие платы — раскомментируйте `CAMERA_MODEL_*` в `app_config.h`.
+
+Подсветка (GPIO 4 на AI-Thinker): логарифмическая шкала яркости 0–100%, автовспышка при съёмке в темноте, опционально при MJPEG-стриме (`STREAM_AUTOLAMP`).
 
 ## Быстрый старт
 
@@ -56,16 +60,26 @@
 
 ## API (HTTP)
 
+Совместимо с идеями [easytarget/esp32-cam-webserver](https://github.com/easytarget/esp32-cam-webserver/blob/master/API.md):
+
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET | `/` | Веб-интерфейс |
-| GET | `/stream` | MJPEG |
-| GET | `/capture.jpg` | Один снимок |
-| GET | `/api/status` | JSON статус |
+| GET | `/` | Веб-интерфейс + управление |
+| GET | `/viewer` | Только поток (двойной клик — fullscreen) |
+| GET | `/stream` | MJPEG (один клиент) |
+| GET | `/capture` или `/capture.jpg` | Снимок max quality |
+| GET | `/control?var=&val=` | `lamp`, `framesize`, `quality`, `hmirror`, `vflip`, … |
+| GET | `/dump` | Диагностика (HTML) |
+| GET | `/stop` | Остановить активный стрим |
+| GET | `/api/status` | JSON: камера, сенсор, таймлапс, мониторинг |
 | POST | `/api/timelapse/start` | `{"interval":30}` |
 | POST | `/api/timelapse/stop` | Остановка |
 | POST | `/api/monitor/start` | `{"interval":60}` |
 | POST | `/api/monitor/stop` | Остановка |
+
+Примеры:
+- Вспышка 80%: `http://<IP>/control?var=lamp&val=80`
+- Зеркало по горизонтали: `/control?var=hmirror&val=1`
 
 ## Команды Telegram
 
@@ -87,7 +101,10 @@
 - `MONITOR_STALL_MINUTES` — через сколько минут без движения слать предупреждение  
 - `MONITOR_MOTION_THRESHOLD` — порог «движения» в %  
 - `PRINTER_POWER_GPIO`, `PRINTER_POWER_DEBOUNCE_MS` — детект включения принтера  
-- `FLASH_DARK_AVG_THRESHOLD`, `FLASH_BRIGHTNESS` — автовспышка  
+- `CAMERA_MODEL_*` — тип платы (`camera_pins.h`)  
+- `STREAM_AUTOLAMP`, `STREAM_LAMP_PERCENT` — подсветка при стриме  
+- `STREAM_MIN_FRAME_MS` — лимит FPS потока  
+- `FLASH_LAMP_PERCENT`, `FLASH_DARK_AVG_THRESHOLD` — снимки  
 
 ## Сборка таймлапса в видео (на ПК)
 
@@ -106,6 +123,7 @@ ffmpeg -framerate 30 -pattern_type glob -i 'img_*.jpg' -c:v libx264 -pix_fmt yuv
 | SD не монтируется | FAT32, карта ≤ 32 ГБ, вставлена до включения |
 | Telegram не шлёт | Токен, chat_id, интернет; в Serial смотрите ошибки |
 | Подвисания Wi‑Fi | Отдельный БП 5 V, антенна, роутер 2.4 GHz |
+| Стрим не открывается | Уже идёт другой клиент — нажмите «Стоп» или `/stop` |
 
 ## Структура проекта
 
@@ -114,11 +132,14 @@ esp32-printer-cam/
 ├── platformio.ini
 ├── include/
 │   ├── app_config.h
+│   ├── camera_pins.h
 │   ├── secrets.example.h
 │   └── secrets.h          ← не в git
 └── src/
     ├── main.cpp
-    ├── camera_module.*    ← автоинициализация камеры
+    ├── camera_module.*    ← камера, подсветка, стрим
+    ├── camera_control.* ← API /control
+    ├── wifi_manager.*
     ├── sd_card.*
     ├── timelapse.*
     ├── print_monitor.*

@@ -1,47 +1,109 @@
 #include "camera_module.h"
 #include "app_config.h"
+#include "camera_pins.h"
+#include <math.h>
 
 static CameraInfo g_info;
 static bool g_flashPwmReady = false;
+static int g_lampPercent = FLASH_LAMP_PERCENT;
+static bool g_streamAutolamp = STREAM_AUTOLAMP;
+static volatile bool g_streamActive = false;
+static volatile bool g_streamKill = false;
+
+static int lampPercentToPwm(int percent) {
+    if (percent <= 0) return 0;
+    const int pwmMax = (1 << FLASH_PWM_RES_BITS) - 1;
+    double v = (pow(2.0, (1.0 + (percent * 0.02))) - 2.0) / 6.0 * pwmMax;
+    return constrain((int)round(v), 0, pwmMax);
+}
 
 void cameraFlashInit() {
-    pinMode(FLASH_LED_GPIO, OUTPUT);
-    digitalWrite(FLASH_LED_GPIO, LOW);
+#if LAMP_PIN >= 0
+    pinMode(LAMP_PIN, OUTPUT);
+    digitalWrite(LAMP_PIN, LOW);
+#endif
+#if defined(STATUS_LED_GPIO) && STATUS_LED_GPIO >= 0
+    pinMode(STATUS_LED_GPIO, OUTPUT);
+    digitalWrite(STATUS_LED_GPIO, !STATUS_LED_ON);
+#endif
     g_flashPwmReady = false;
 }
 
-void cameraFlashSet(uint8_t brightness) {
+void cameraFlashSet(uint8_t pwmRaw) {
+#if LAMP_PIN < 0
+    (void)pwmRaw;
+    return;
+#else
     if (!g_flashPwmReady) {
         ledcSetup(FLASH_PWM_CHANNEL, FLASH_PWM_FREQ_HZ, FLASH_PWM_RES_BITS);
-        ledcAttachPin(FLASH_LED_GPIO, FLASH_PWM_CHANNEL);
+        ledcAttachPin(LAMP_PIN, FLASH_PWM_CHANNEL);
         g_flashPwmReady = true;
     }
-    ledcWrite(FLASH_PWM_CHANNEL, brightness);
-    if (brightness == 0) {
-        digitalWrite(FLASH_LED_GPIO, LOW);
+    ledcWrite(FLASH_PWM_CHANNEL, pwmRaw);
+    if (pwmRaw == 0) {
+        digitalWrite(LAMP_PIN, LOW);
     }
+#endif
 }
 
-static camera_config_t aiThinkerConfig() {
+void cameraFlashSetPercent(int percent) {
+    cameraFlashSet((uint8_t)lampPercentToPwm(constrain(percent, 0, 100)));
+}
+
+int cameraGetLampPercent() { return g_lampPercent; }
+void cameraSetLampPercent(int percent) { g_lampPercent = constrain(percent, 0, 100); }
+
+void cameraSetStreamAutolamp(bool on) { g_streamAutolamp = on; }
+bool cameraStreamAutolamp() { return g_streamAutolamp; }
+
+void cameraStreamLampOn() {
+#if STREAM_AUTOLAMP && LAMP_PIN >= 0
+    if (g_streamAutolamp) {
+        cameraFlashSetPercent(STREAM_LAMP_PERCENT);
+    }
+#endif
+}
+
+void cameraStreamLampOff() {
+#if LAMP_PIN >= 0
+    cameraFlashSet(0);
+#endif
+}
+
+void cameraStatusLedFlash(int ms) {
+#if defined(STATUS_LED_GPIO) && STATUS_LED_GPIO >= 0
+    digitalWrite(STATUS_LED_GPIO, STATUS_LED_ON);
+    delay(ms);
+    digitalWrite(STATUS_LED_GPIO, !STATUS_LED_ON);
+#endif
+}
+
+bool cameraStreamActive() { return g_streamActive; }
+void cameraStreamSetActive(bool active) { g_streamActive = active; }
+void cameraStreamReset() { g_streamKill = false; }
+void cameraStreamRequestStop() { g_streamKill = true; }
+bool cameraStreamShouldStop() { return g_streamKill; }
+
+static camera_config_t boardCameraConfig() {
     camera_config_t cfg = {};
     cfg.ledc_channel = LEDC_CHANNEL_0;
     cfg.ledc_timer = LEDC_TIMER_0;
-    cfg.pin_d0 = 5;
-    cfg.pin_d1 = 18;
-    cfg.pin_d2 = 19;
-    cfg.pin_d3 = 21;
-    cfg.pin_d4 = 36;
-    cfg.pin_d5 = 39;
-    cfg.pin_d6 = 34;
-    cfg.pin_d7 = 35;
-    cfg.pin_xclk = 0;
-    cfg.pin_pclk = 22;
-    cfg.pin_vsync = 25;
-    cfg.pin_href = 23;
-    cfg.pin_sccb_sda = 26;
-    cfg.pin_sccb_scl = 27;
-    cfg.pin_pwdn = 32;
-    cfg.pin_reset = -1;
+    cfg.pin_d0 = Y2_GPIO_NUM;
+    cfg.pin_d1 = Y3_GPIO_NUM;
+    cfg.pin_d2 = Y4_GPIO_NUM;
+    cfg.pin_d3 = Y5_GPIO_NUM;
+    cfg.pin_d4 = Y6_GPIO_NUM;
+    cfg.pin_d5 = Y7_GPIO_NUM;
+    cfg.pin_d6 = Y8_GPIO_NUM;
+    cfg.pin_d7 = Y9_GPIO_NUM;
+    cfg.pin_xclk = XCLK_GPIO_NUM;
+    cfg.pin_pclk = PCLK_GPIO_NUM;
+    cfg.pin_vsync = VSYNC_GPIO_NUM;
+    cfg.pin_href = HREF_GPIO_NUM;
+    cfg.pin_sccb_sda = SIOD_GPIO_NUM;
+    cfg.pin_sccb_scl = SIOC_GPIO_NUM;
+    cfg.pin_pwdn = PWDN_GPIO_NUM;
+    cfg.pin_reset = RESET_GPIO_NUM;
     cfg.xclk_freq_hz = 20000000;
     cfg.pixel_format = PIXFORMAT_JPEG;
     cfg.frame_size = FRAMESIZE_UXGA;
@@ -55,7 +117,7 @@ static camera_config_t aiThinkerConfig() {
 bool cameraInitAuto(CameraInfo &info) {
     cameraFlashInit();
 
-    camera_config_t cfg = aiThinkerConfig();
+    camera_config_t cfg = boardCameraConfig();
     esp_err_t err = esp_camera_init(&cfg);
     if (err != ESP_OK) {
         Serial.printf("[CAM] init failed: 0x%x\n", err);
@@ -78,6 +140,7 @@ bool cameraInitAuto(CameraInfo &info) {
         info.maxFrameSize = si->max_framesize;
     } else {
         info.name = "unknown";
+        info.maxFrameSize = FRAMESIZE_UXGA;
     }
 
     g_info = info;
@@ -105,7 +168,7 @@ bool cameraInitAuto(CameraInfo &info) {
     s->set_framesize(s, info.maxFrameSize);
     s->set_quality(s, SNAPSHOT_QUALITY);
 
-    Serial.printf("[CAM] detected: %s PID=0x%04x snapshot=%d quality=%d\n",
+    Serial.printf("[CAM] %s PID=0x%04x snapshot=%d quality=%d\n",
                   info.name, info.sensorId.PID, (int)info.maxFrameSize, SNAPSHOT_QUALITY);
     return true;
 }
@@ -114,9 +177,7 @@ framesize_t cameraSnapshotSize() {
     return g_info.ok ? g_info.maxFrameSize : FRAMESIZE_UXGA;
 }
 
-int cameraSnapshotQuality() {
-    return SNAPSHOT_QUALITY;
-}
+int cameraSnapshotQuality() { return SNAPSHOT_QUALITY; }
 
 const char *cameraSnapshotResolutionName() {
     switch (cameraSnapshotSize()) {
@@ -129,11 +190,7 @@ const char *cameraSnapshotResolutionName() {
         case FRAMESIZE_SXGA: return "1280x1024";
         case FRAMESIZE_UXGA: return "1600x1200";
         case FRAMESIZE_FHD: return "1920x1080";
-        case FRAMESIZE_P_HD: return "720x1280";
-        case FRAMESIZE_P_3MP: return "864x1536";
         case FRAMESIZE_QXGA: return "2048x1536";
-        case FRAMESIZE_QHD: return "2560x1440";
-        case FRAMESIZE_WQXGA: return "2560x1600";
         case FRAMESIZE_5MP: return "2592x1944";
         default: return "max";
     }
@@ -164,7 +221,6 @@ bool cameraIsDarkScene() {
     if (!s) return false;
 
     framesize_t prevSize = s->status.framesize;
-
     s->set_framesize(s, FRAMESIZE_96X96);
     s->set_pixformat(s, PIXFORMAT_GRAYSCALE);
 
@@ -180,16 +236,13 @@ bool cameraIsDarkScene() {
 
     uint32_t sum = 0;
     size_t step = max((size_t)1, fb->len / 64);
-    for (size_t i = 0; i < 64; i++) {
-        sum += fb->buf[i * step];
-    }
+    for (size_t i = 0; i < 64; i++) sum += fb->buf[i * step];
     uint8_t avg = (uint8_t)(sum / 64);
     esp_camera_fb_return(fb);
 
     s->set_pixformat(s, PIXFORMAT_JPEG);
     s->set_framesize(s, prevSize);
 
-    Serial.printf("[CAM] ambient avg=%u (threshold %d)\n", avg, FLASH_DARK_AVG_THRESHOLD);
     return avg < FLASH_DARK_AVG_THRESHOLD;
 }
 
@@ -232,24 +285,20 @@ bool cameraCaptureJpeg(framesize_t size, int quality, uint8_t **buf, size_t *len
 
     bool useFlash = false;
 #if FLASH_AUTO_ENABLE
-    if (autoFlash) {
-        useFlash = cameraIsDarkScene();
-    }
+    if (autoFlash) useFlash = cameraIsDarkScene();
 #else
     (void)autoFlash;
 #endif
 
     if (useFlash) {
-        cameraFlashSet(FLASH_BRIGHTNESS);
+        cameraFlashSetPercent(g_lampPercent > 0 ? g_lampPercent : FLASH_LAMP_PERCENT);
         delay(FLASH_WARMUP_MS);
-        esp_camera_fb_return(esp_camera_fb_get());
+        discardFrames(1);
     }
 
     bool ok = captureFrame(s, size, quality, buf, len);
 
-    if (useFlash) {
-        cameraFlashSet(0);
-    }
+    if (useFlash) cameraFlashSet(0);
 
     return ok;
 }
